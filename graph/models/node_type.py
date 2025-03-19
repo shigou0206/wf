@@ -1,5 +1,5 @@
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import (
     Any,
     Dict,
@@ -8,51 +8,77 @@ from typing import (
     Callable,
     Protocol,
     Union,
+    Awaitable,
 )
 
 from .description_model import NodeTypeDescription
+from .data_model import NodeExecutionData, NodeOutput
+from .utils import CloseFunction
+from .func_protocol import *
 
 # 下列类或 Protocol 仅占位, 你可以做更细化的定义:
-class ISupplyDataFunctions(Protocol):
-    pass
-
-class IExecuteFunctions(Protocol):
-    pass
-
-class IPollFunctions(Protocol):
-    pass
-
-class ITriggerFunctions(Protocol):
-    pass
-
-class IWebhookFunctions(Protocol):
-    pass
-
-class ILoadOptionsFunctions(Protocol):
-    pass
-
-class ILocalLoadOptionsFunctions(Protocol):
-    pass
-
-class IHookFunctions(Protocol):
-    pass
 
 # 数据、结果、配置等类型:
-SupplyData = Any
-NodeOutput = Any
-INodeExecutionData = Any
-ITriggerResponse = Any
-IWebhookResponseData = Any
 ResourceMapperFields = Any
 NodeParameterValueType = Any
-INodePropertyOptions = Any
-INodeListSearchResult = Any
-ICredentialTestFunction = Callable[..., Any]
+NodePropertyOptions = Any
+NodeListSearchResult = Any
+CredentialTestFunction = Callable[..., Any]
 
 # WebhookType, WebhookSetupMethodNames 在 TS 中可能是字符串枚举，这里简单用 str
 WebhookType = str
 WebhookSetupMethodNames = str
 
+ManualTriggerFunction = Callable[[], Awaitable[None]]
+ManualTriggerResponse = Awaitable[List[List[NodeExecutionData]]]
+
+@dataclass
+class TriggerResponse:
+    """
+    与 TypeScript 的 ITriggerResponse 等价，但使用 dataclass。
+    若不传对应字段则默认为 None。
+    """
+    close_function: Optional[CloseFunction] = None
+    manual_trigger_function: Optional[ManualTriggerFunction] = None
+    manual_trigger_response: Optional[ManualTriggerResponse] = None
+
+@dataclass
+class WebhookResponse:
+    workflow_data: Optional[List[List[NodeExecutionData]]] = None
+    webhook_response: Any = None
+    no_webhook_response: Optional[bool] = None
+
+@dataclass
+class SupplyData:
+    """
+    对应 TypeScript 中的:
+
+      export interface SupplyData {
+        metadata?: IDataObject;       # -> metadata: Optional[Dict[str, Any]]
+        response: unknown;            # -> response: Any (required)
+        closeFunction?: CloseFunction # -> Optional[CloseFunction]
+      }
+    """
+    response: Any
+    metadata: Optional[Dict[str, Any]] = None
+    closeFunction: Optional[CloseFunction] = None
+
+
+@dataclass
+class NodePropertyOptions:
+    name: Optional[str] = None
+    value: Optional[str] = None
+    # 若有更多必填字段，可去掉 Optional 并不给默认值
+
+@dataclass
+class NodeListSearchItems(NodePropertyOptions):
+    icon: Optional[str] = None
+    url: Optional[str] = None
+
+@dataclass
+class NodeListSearchResult:
+    results: List[NodeListSearchItems] = field(default_factory=list)
+    pagination_token: Any = None
 
 #
 # 2. 用抽象基类表示 "INodeType"
@@ -72,7 +98,7 @@ class NodeType(ABC):
     #
     def supply_data(
         self,
-        context: ISupplyDataFunctions,
+        context: SupplyDataFunctions,
         item_index: int
     ) -> SupplyData:
         """
@@ -87,7 +113,7 @@ class NodeType(ABC):
     #
     def execute(
         self,
-        context: IExecuteFunctions
+        context: ExecuteFunctions
     ) -> NodeOutput:
         """
         如果节点需要执行逻辑，可在子类中 override。
@@ -101,8 +127,8 @@ class NodeType(ABC):
     #
     def poll(
         self,
-        context: IPollFunctions
-    ) -> Optional[List[List[INodeExecutionData]]]:
+        context: PollFunctions
+    ) -> Optional[List[List[NodeExecutionData]]]:
         """
         如果节点需要轮询，可在子类中 override。
         返回 None 表示未实现或无结果。
@@ -114,8 +140,8 @@ class NodeType(ABC):
     #
     def trigger(
         self,
-        context: ITriggerFunctions
-    ) -> Optional[ITriggerResponse]:
+        context: TriggerFunctions
+    ) -> Optional[TriggerResponse]:
         """
         如果节点需要触发机制，可在子类中 override。
         返回 None 表示未实现。
@@ -127,8 +153,8 @@ class NodeType(ABC):
     #
     def webhook(
         self,
-        context: IWebhookFunctions
-    ) -> IWebhookResponseData:
+        context: WebhookFunctions
+    ) -> WebhookResponse:
         """
         如果节点实现 webhook，可在子类中 override。
         默认抛出异常。
@@ -143,7 +169,7 @@ class NodeType(ABC):
     # 你可以把 loadOptions、listSearch 等做成单独方法/属性来返回字典或直接写在子类。
     #
 
-    def methods_load_options(self) -> Dict[str, Callable[[ILoadOptionsFunctions], List[INodePropertyOptions]]]:
+    def methods_load_options(self) -> Dict[str, Callable[[LoadOptionsFunctions], List[NodePropertyOptions]]]:
         """
         对应 methods.loadOptions
         在子类中可返回:
@@ -154,31 +180,31 @@ class NodeType(ABC):
         """
         return {}
 
-    def methods_list_search(self) -> Dict[str, Callable[[ILoadOptionsFunctions, Optional[str], Optional[str]], INodeListSearchResult]]:
+    def methods_list_search(self) -> Dict[str, Callable[[LoadOptionsFunctions, Optional[str], Optional[str]], NodeListSearchResult]]:
         """
         对应 methods.listSearch
         """
         return {}
 
-    def methods_credential_test(self) -> Dict[str, ICredentialTestFunction]:
+    def methods_credential_test(self) -> Dict[str, CredentialTestFunction]:
         """
         对应 methods.credentialTest
         """
         return {}
 
-    def methods_resource_mapping(self) -> Dict[str, Callable[[ILoadOptionsFunctions], ResourceMapperFields]]:
+    def methods_resource_mapping(self) -> Dict[str, Callable[[LoadOptionsFunctions], ResourceMapperFields]]:
         """
         对应 methods.resourceMapping
         """
         return {}
 
-    def methods_local_resource_mapping(self) -> Dict[str, Callable[[ILocalLoadOptionsFunctions], ResourceMapperFields]]:
+    def methods_local_resource_mapping(self) -> Dict[str, Callable[[LocalLoadOptionsFunctions], ResourceMapperFields]]:
         """
         对应 methods.localResourceMapping
         """
         return {}
 
-    def methods_action_handler(self) -> Dict[str, Callable[[ILoadOptionsFunctions, Union[dict, str, None]], NodeParameterValueType]]:
+    def methods_action_handler(self) -> Dict[str, Callable[[LoadOptionsFunctions, Union[dict, str, None]], NodeParameterValueType]]:
         """
         对应 methods.actionHandler
         """
@@ -204,7 +230,7 @@ class NodeType(ABC):
     #
     # === 对应 webhookMethods?: { [name in WebhookType]?: ... } ===
     #
-    def webhook_methods(self) -> Dict[WebhookType, Dict[WebhookSetupMethodNames, Callable[[IHookFunctions], bool]]]:
+    def webhook_methods(self) -> Dict[WebhookType, Dict[WebhookSetupMethodNames, Callable[[HookFunctions], bool]]]:
         """
         在子类中可返回相应字典:
         {
@@ -219,7 +245,7 @@ class NodeType(ABC):
     #
     # === 对应 customOperations?: { [resource: string]: { [operation: string]: (this: IExecuteFunctions) => Promise<NodeOutput> } } ===
     #
-    def custom_operations(self) -> Dict[str, Dict[str, Callable[[IExecuteFunctions], NodeOutput]]]:
+    def custom_operations(self) -> Dict[str, Dict[str, Callable[[ExecuteFunctions], NodeOutput]]]:
         """
         如: { resource: { operation: func } }   
         """

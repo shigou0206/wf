@@ -1,6 +1,8 @@
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union, List, Literal
+from .utils import ConnectionType
+from .node_type import NodeConnectionType
 
 
 class OnError(str, Enum):
@@ -11,24 +13,15 @@ class OnError(str, Enum):
 
 @dataclass
 class NodeCredentialsDetail:
-    """
-    Dataclass 对应原先的 NodeCredentialsDetail TypedDict
-    """
     name: str
     id: Optional[str] = None
 
 
-# 映射：credentials_key -> NodeCredentialsDetail
 NodeCredentials = Dict[str, NodeCredentialsDetail]
 
 
 @dataclass
 class WorkflowNode:
-    """
-    Dataclass 版本的 WorkflowNode，替代 TypedDict。
-    Fields with default=None 等价于可选字段。
-    """
-
     id: Optional[str] = None
     name: Optional[str] = None
     type_version: Optional[int] = None
@@ -52,3 +45,40 @@ class WorkflowNode:
 
 # 映射： node_key -> WorkflowNode
 WorkflowNodes = Dict[str, WorkflowNode]
+
+@dataclass
+class ConnectedNode:
+    """
+    Pythonic class版本，与 TypeScript IConnectedNode 等价。
+    """
+    name: str
+    indicies: List[int]
+    depth: int
+
+@dataclass
+class NodePropertyOptions:
+    name: str
+    value: Union[str, int, bool]
+    action: Optional[str] = None
+    description: Optional[str] = None
+    output_connection_type: Optional[ConnectionType] = None
+
+
+CategoryType = Literal["error"]
+
+@dataclass
+class NodeOutputConfiguration:
+    """
+    Pythonic dataclass 等价于 TypeScript: {
+        category?: 'error',
+        displayName?: string,
+        maxConnections?: number,
+        required?: boolean,
+        type: NodeConnectionType
+    }
+    """
+    category: Optional[CategoryType] = None
+    display_name: Optional[str] = None
+    max_connections: Optional[int] = None
+    required: Optional[bool] = None
+    type: Optional[NodeConnectionType] = None

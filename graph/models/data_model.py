@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Union, List, Literal
 
@@ -44,6 +45,37 @@ class NodeExecutionData:
     metadata: Optional[Dict[str, RelatedExecution]] = None
     extra: Dict[str, object] = field(default_factory=dict)
 
+PinData = Dict[str, List[NodeExecutionData]]
+
+NodeOutput = Union[
+    List[List[NodeExecutionData]],
+    None
+]
+
+CallerPolicy = Literal["any", "none", "workflowsFromAList", "workflowsFromSameOwner"]
+SaveDataExecution = Literal["DEFAULT", "all", "none"]
+DefaultOrBool = Union[Literal["DEFAULT"], bool]
+ExecutionOrder = Literal["v0", "v1"]
+TimezoneType = Union[Literal["DEFAULT"], str]
+
+@dataclass
+class WorkflowSettings:
+    """
+    Pythonic 版本，对应 IWorkflowSettings。
+    使用 snake_case 命名，并用 Optional[...] 表示可选字段。
+    """
+    timezone: Optional[TimezoneType] = None
+    error_workflow: Optional[str] = None
+    caller_ids: Optional[str] = None
+    caller_policy: Optional[CallerPolicy] = None
+    save_data_error_execution: Optional[SaveDataExecution] = None
+    save_data_success_execution: Optional[SaveDataExecution] = None
+    save_manual_executions: Optional[DefaultOrBool] = None
+    save_execution_progress: Optional[DefaultOrBool] = None
+    execution_timeout: Optional[int] = None
+    execution_order: Optional[ExecutionOrder] = None
+
+ObservableObject = Dict[str, Any]
 
 # Example usage
 if __name__ == "__main__":
