@@ -1,17 +1,16 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import (
     Any,
     Dict,
     List,
     Optional,
-    Callable,
-    Protocol,
+    Callable,  
     Union,
     Awaitable,
 )
 
-from .description_model import NodeTypeDescription
+from .description_model import NodeTypeDescription, NodeTypeBaseDescription
 from .data_model import NodeExecutionData, NodeOutput
 from .utils import CloseFunction
 from .func_protocol import *
@@ -250,3 +249,58 @@ class NodeType(ABC):
         如: { resource: { operation: func } }   
         """
         return {}
+    
+class VersionedNodeType(ABC):
+    """
+    对应 TypeScript: 
+
+    export interface IVersionedNodeType {
+        nodeVersions: { [key: number]: INodeType };
+        currentVersion: number;
+        description: INodeTypeBaseDescription;
+        getNodeType: (version?: number) => INodeType;
+    }
+    """
+
+    # nodeVersions 使用属性+方法 或在子类中直接实现，视项目需要
+    @property
+    @abstractmethod
+    def node_versions(self) -> Dict[int, NodeType]:
+        pass
+
+    @property
+    @abstractmethod
+    def current_version(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def description(self) -> NodeTypeBaseDescription:
+        pass
+
+    @abstractmethod
+    def get_node_type(self, version: Optional[int] = None) -> NodeType:
+        pass
+
+class NodeTypes(ABC):
+    """
+    对应 TypeScript 中的:
+    
+    export interface INodeTypes {
+        getByName(nodeType: string): INodeType | IVersionedNodeType;
+        getByNameAndVersion(nodeType: string, version?: number): INodeType;
+        getKnownTypes(): IDataObject;
+    }
+    """
+
+    @abstractmethod
+    def get_by_name(self, node_type: str) -> Union[NodeType, VersionedNodeType]:
+        pass
+
+    @abstractmethod
+    def get_by_name_and_version(self, node_type: str, version: Optional[int] = None) -> NodeType:
+        pass
+
+    @abstractmethod
+    def get_known_types(self) -> Any:
+        pass
