@@ -1,10 +1,25 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Dict, Optional, Union, List, Literal, TypedDict
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Union, List, Literal
+from enum import Enum
+from pathlib import Path
 
-BinaryFileType = Literal["text", "json", "image", "audio", "video", "pdf", "html"]
+class BinaryFileType(Enum):
+    TEXT = "text"
+    JSON = "json"
+    IMAGE = "image"
+    AUDIO = "audio"
+    VIDEO = "video"
+    PDF = "pdf"
+    HTML = "html"
+
+    @classmethod
+    def from_string(cls, value: str) -> Optional["BinaryFileType"]:
+        for item in cls:
+            if item.value == value.lower():
+                return item
+        return None
 
 @dataclass
 class BinaryData:
@@ -14,10 +29,42 @@ class BinaryData:
     file_name: Optional[str] = None
     directory: Optional[str] = None
     file_extension: Optional[str] = None
-    file_size: Optional[int] = None
+    file_size: int = 0
     id: Optional[str] = None
 
-# Simplified: just a type alias for str -> BinaryData mapping
+    def get_full_path(self) -> Optional[Path]:
+        if self.directory and self.file_name:
+            return Path(self.directory) / self.file_name
+        return None
+
+    def is_valid_file(self) -> bool:
+        return bool(self.data and self.mime_type and self.file_name)
+
+    def to_dict(self) -> dict:
+        return {
+            "data": self.data,
+            "mime_type": self.mime_type,
+            "file_type": self.file_type.value if self.file_type else None,
+            "file_name": self.file_name,
+            "directory": self.directory,
+            "file_extension": self.file_extension,
+            "file_size": self.file_size,
+            "id": self.id
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "BinaryData":
+        return cls(
+            data=data["data"],
+            mime_type=data["mime_type"],
+            file_type=BinaryFileType.from_string(data.get("file_type", "")),
+            file_name=data.get("file_name"),
+            directory=data.get("directory"),
+            file_extension=data.get("file_extension"),
+            file_size=data.get("file_size", 0),
+            id=data.get("id"),
+        )
+
 BinaryKeyData = Dict[str, BinaryData]
 
 @dataclass
@@ -60,10 +107,6 @@ TimezoneType = Union[Literal["DEFAULT"], str]
 
 @dataclass
 class WorkflowSettings:
-    """
-    Pythonic 版本，对应 IWorkflowSettings。
-    使用 snake_case 命名，并用 Optional[...] 表示可选字段。
-    """
     timezone: Optional[TimezoneType] = None
     error_workflow: Optional[str] = None
     caller_ids: Optional[str] = None
@@ -75,7 +118,35 @@ class WorkflowSettings:
     execution_timeout: Optional[int] = None
     execution_order: Optional[ExecutionOrder] = None
 
-ObservableObject = Dict[str, Any]
+class DisplayConditionDict(TypedDict):
+    cnd: Dict[str, Union[str, int, bool, Dict[str, Union[str, int]]]]
+
+@dataclass
+class DisplayCondition:
+    eq: Optional[Union[str, int]] = None
+    not_eq: Optional[Union[str, int]] = None
+    gte: Optional[Union[str, int]] = None
+    lte: Optional[Union[str, int]] = None
+    gt: Optional[Union[str, int]] = None
+    lt: Optional[Union[str, int]] = None
+    between: Optional[Dict[str, Union[str, int]]] = None
+    startsWith: Optional[str] = None
+    endsWith: Optional[str] = None
+    includes: Optional[str] = None
+    regex: Optional[str] = None
+    exists: Optional[bool] = None
+
+class DisplayOptionsDict(TypedDict, total=False):
+    hide: Dict[str, List[DisplayConditionDict]]
+    show: Dict[str, List[DisplayConditionDict]]
+    hideOnCloud: bool
+
+
+@dataclass
+class DisplayOptions:
+    hide: Optional[Dict[str, List[DisplayCondition]]] = None
+    show: Optional[Dict[str, List[DisplayCondition]]] = None
+    hideOnCloud: Optional[bool] = None
 
 # Example usage
 if __name__ == "__main__":

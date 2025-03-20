@@ -1,7 +1,7 @@
 # tests/test_engine.py
 
 import pytest
-from graph.workflow import Workflow, Node, ConnectionInfo
+from graph.models.wf_model_old import Workflow, Node, ConnectionInfo
 from engine.executor import WorkflowExecutor
 
 def create_multi_input_workflow():

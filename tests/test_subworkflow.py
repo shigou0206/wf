@@ -1,7 +1,7 @@
 # tests/test_subworkflow.py
 
 import pytest
-from graph.workflow import Workflow, Node, ConnectionInfo
+from graph.models.wf_model_old import Workflow, Node, ConnectionInfo
 from engine.executor import WorkflowExecutor
 from engine.node_types import ExecuteSubWorkflowNode, ProducerNodeType
 

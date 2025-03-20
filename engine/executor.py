@@ -5,7 +5,7 @@ import time
 from .models import NodeResult, ExecutionStatus, ExecutionError
 from .context import NodeExecutionContext
 from .node_types import NodeType, SwitchNodeType, ProducerNodeType
-from graph.workflow import Workflow, Node, ConnectionInfo
+from graph.models.wf_model_old import Workflow, Node, ConnectionInfo
 
 from .logger import Logger
 from .hooks import HookManager

@@ -1,7 +1,7 @@
 # tests/test_workflow.py
 
 import pytest
-from graph.workflow import Workflow, Node, ConnectionInfo
+from graph.models.wf_model_old import Workflow, Node, ConnectionInfo
 
 def test_rename_node():
     """
