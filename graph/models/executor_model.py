@@ -142,9 +142,3 @@ class Run:
     stopped_at: Optional[datetime] = None
     status: ExecutionStatus = ExecutionStatus.NEW
     wait_till: Optional[datetime] = None
-
-    # ✅ 兼容旧代码（弃用 `finished`）
-    @property
-    def finished(self) -> bool:
-        """Deprecated: Use `status` instead."""
-        return self.status in {ExecutionStatus.SUCCESS, ExecutionStatus.CANCELED, ExecutionStatus.ERROR}

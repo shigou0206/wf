@@ -273,15 +273,6 @@ def rename_node_in_parameter_value(
     new_name: str,
     has_renamable_content: bool = False
 ) -> Union[str, List[Any], Dict[str, Any]]:
-    """
-    在参数值中重命名节点引用，例如 `$node["oldName"]` -> `$node["newName"]`
-
-    :param parameter_value: 参数值，可以是字符串、列表或字典
-    :param current_name: 当前节点名称
-    :param new_name: 新节点名称
-    :param has_renamable_content: 是否检查 `=` 以外的内容
-    :return: 修改后的参数值
-    """
 
     if not isinstance(parameter_value, (str, list, dict)):
         return parameter_value
@@ -452,3 +443,4 @@ def search_nodes_bfs(connections: Connections, source_node: str, max_depth: int 
 
 def get_parent_nodes_by_depth(connections_by_destination: Connections, node_name: str, max_depth: int = -1) -> List[ConnectedNode]:
     return search_nodes_bfs(connections_by_destination, node_name, max_depth)
+

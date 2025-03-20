@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, Callable, List, Union
 import logging
+from datetime import datetime
 
 from .node_model import WorkflowNode, WorkflowNodes, NodeOutputConfiguration
 from .connection_model import Connections, ConnectionType
@@ -15,6 +16,25 @@ from .utils import (
     NODES_WITH_RENAMABLE_CONTENT
 )
 
+@dataclass
+class WorkflowBase:
+    id: str
+    name: str
+    active: bool
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    nodes: List[WorkflowNode] = field(default_factory=list)
+    connections: Connections = field(default_factory=dict)
+    settings: Optional[WorkflowSettings] = None
+    static_data: Optional[Dict] = None
+    pin_data: Optional[PinData] = None
+    version_id: Optional[str] = None
+
+@dataclass
+class ExecuteWorkflowInfo:
+    code: Optional[WorkflowBase] = None
+    id: Optional[str] = None
 
 @dataclass
 class WorkflowParameters:
