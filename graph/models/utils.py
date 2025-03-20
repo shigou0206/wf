@@ -1,10 +1,18 @@
-from typing import Optional, Callable, List, Dict, Awaitable, Any
-from .node_model import NodeProperties
-from .connection_model import NodeConnection, Connections
-from collections import defaultdict
+from typing import Optional, Callable, List, Dict, Awaitable, Any, Union
+from .node_model import NodeProperties, ConnectedNode
+from .connection_model import NodeConnection, Connections, ConnectionType
+from collections import defaultdict, deque
 import copy
+import re
 
 CloseFunction = Callable[[], Awaitable[None]]
+
+NODES_WITH_RENAMABLE_CONTENT = {
+    "CODE_NODE_TYPE",
+    "FUNCTION_NODE_TYPE",
+    "FUNCTION_ITEM_NODE_TYPE",
+    "AI_TRANSFORM_NODE_TYPE",
+}
 
 class GlobalState:
     """Manages global state settings such as timezone."""
@@ -243,3 +251,204 @@ def get_connections_by_destination(connections: Connections) -> Connections:
 
     return return_connections
 
+
+def backslash_escape(value: str) -> str:
+    """对字符串进行反斜杠转义以便于正则匹配"""
+    return re.escape(value)
+
+
+def dollar_escape(value: str) -> str:
+    """用于替换 `new_name`，确保符合 `$node[...]` 格式"""
+    return value.replace('"', '\\"').replace("'", "\\'")
+
+
+def has_dot_notation_banned_char(value: str) -> bool:
+    """检查新名称是否包含点号，可能需要用 `["..."]` 代替点符号"""
+    return "." in value
+
+
+def rename_node_in_parameter_value(
+    parameter_value: Union[str, List[Any], Dict[str, Any]],
+    current_name: str,
+    new_name: str,
+    has_renamable_content: bool = False
+) -> Union[str, List[Any], Dict[str, Any]]:
+    """
+    在参数值中重命名节点引用，例如 `$node["oldName"]` -> `$node["newName"]`
+
+    :param parameter_value: 参数值，可以是字符串、列表或字典
+    :param current_name: 当前节点名称
+    :param new_name: 新节点名称
+    :param has_renamable_content: 是否检查 `=` 以外的内容
+    :return: 修改后的参数值
+    """
+
+    if not isinstance(parameter_value, (str, list, dict)):
+        return parameter_value
+
+    if isinstance(parameter_value, str):
+        # 只处理以 `=` 开头或允许重命名的字符串
+        if not (parameter_value.startswith("=") or has_renamable_content):
+            return parameter_value
+
+        # 先检查是否包含当前名称，避免不必要的正则替换
+        if current_name not in parameter_value:
+            return parameter_value
+
+        escaped_old_name = backslash_escape(current_name)
+        escaped_new_name = dollar_escape(new_name)
+
+        def replace_pattern(expression: str, old_pattern: str) -> str:
+            return re.sub(old_pattern, rf"\1{escaped_new_name}\2", expression)
+
+        # 处理不同格式的节点引用
+        if "$(" in parameter_value:
+            old_pattern = rf"(\$\(['\"]){escaped_old_name}(['\"]\))"
+            parameter_value = replace_pattern(parameter_value, old_pattern)
+
+        if "$node[" in parameter_value:
+            old_pattern = rf"(\$node\[['\"]){escaped_old_name}(['\"]\])"
+            parameter_value = replace_pattern(parameter_value, old_pattern)
+
+        if "$node." in parameter_value:
+            old_pattern = rf"(\$node\.){escaped_old_name}(\.?)"
+            parameter_value = replace_pattern(parameter_value, old_pattern)
+
+            if has_dot_notation_banned_char(new_name):
+                parameter_value = re.sub(
+                    rf"\.{backslash_escape(new_name)}(\s|\.)",
+                    rf'["{escaped_new_name}"]\1',
+                    parameter_value
+                )
+
+        if "$items(" in parameter_value:
+            old_pattern = rf"(\$items\(['\"]){escaped_old_name}(['\"],|['\"]\))"
+            parameter_value = replace_pattern(parameter_value, old_pattern)
+
+        return parameter_value
+
+    if isinstance(parameter_value, list):
+        return [rename_node_in_parameter_value(value, current_name, new_name) for value in parameter_value]
+
+    if isinstance(parameter_value, dict):
+        return {
+            key: rename_node_in_parameter_value(value, current_name, new_name, has_renamable_content)
+            for key, value in parameter_value.items()
+        }
+
+    return parameter_value
+
+def get_connected_nodes(
+    connections: Connections,
+    node_name: str,
+    connection_type: Union[ConnectionType, str] = ConnectionType.MAIN,
+    depth: int = -1,
+    checked_nodes_incoming: Optional[List[str]] = None,
+) -> List[str]:
+    if depth == 0:
+        return []
+
+    if node_name not in connections:
+        return []
+
+    new_depth = depth - 1 if depth > 0 else -1
+    checked_nodes = checked_nodes_incoming[:] if checked_nodes_incoming else []
+
+    if node_name in checked_nodes:
+        return []
+
+    checked_nodes.append(node_name)
+
+    # 处理不同类型的连接
+    if connection_type == "ALL":
+        types = list(connections[node_name].keys())
+    elif connection_type == "ALL_NON_MAIN":
+        types = [t for t in connections[node_name] if t != ConnectionType.MAIN]
+    else:
+        types = [connection_type]
+
+    return_nodes = []
+
+    for conn_type in types:
+        if conn_type not in connections[node_name]:
+            continue
+
+        for connections_by_index in connections[node_name][conn_type]:
+            for connection in connections_by_index:
+                if connection["node"] in checked_nodes:
+                    continue
+
+                return_nodes.insert(0, connection["node"])
+
+                add_nodes = get_connected_nodes(
+                    connections, connection["node"], connection_type, new_depth, checked_nodes
+                )
+
+                for parent_node in reversed(add_nodes):
+                    if parent_node in return_nodes:
+                        return_nodes.remove(parent_node)
+                    return_nodes.insert(0, parent_node)
+
+    return return_nodes
+
+def get_child_nodes(
+    connections_by_source: Connections,
+    node_name: str,
+    connection_type: Union[ConnectionType, str] = ConnectionType.MAIN,
+    depth: int = -1,
+) -> List[str]:
+    return get_connected_nodes(connections_by_source, node_name, connection_type, depth)
+
+def get_parent_nodes(
+    connections_by_destination: Connections,
+    node_name: str,
+    connection_type: Union[ConnectionType, str] = ConnectionType.MAIN,
+    depth: int = -1,
+) -> List[str]:
+    return get_connected_nodes(connections_by_destination, node_name, connection_type, depth)
+
+def search_nodes_bfs(connections: Connections, source_node: str, max_depth: int = -1) -> List[ConnectedNode]:
+    """
+    执行广度优先搜索 (BFS)，查找 `source_node` 可达的所有子节点。
+
+    :param connections: 连接字典，记录节点间的关系
+    :param source_node: 搜索起点节点名称
+    :param max_depth: 最大搜索深度，-1 表示不限制
+    :return: 目标节点列表，包含其名称、深度和索引
+    """
+    return_conns = []  # 结果列表
+    type_ = ConnectionType.MAIN
+    queue = deque([ConnectedNode(source_node, 0, [])])
+    visited: Dict[str, ConnectedNode] = {}
+
+    depth = 0
+    while queue:
+        if max_depth != -1 and depth > max_depth:
+            break
+        depth += 1
+
+        to_add = list(queue)
+        queue.clear()
+
+        for curr in to_add:
+            if curr.name in visited:
+                # 去重处理，合并 indices
+                visited[curr.name].indices = list(set(visited[curr.name].indices + curr.indices))
+                continue
+
+            visited[curr.name] = curr
+            if curr.name != source_node:
+                return_conns.append(curr)
+
+            if curr.name not in connections or type_ not in connections[curr.name]:
+                continue
+
+            for connections_by_index in connections[curr.name][type_]:
+                if connections_by_index:
+                    for connection in connections_by_index:
+                        queue.append(ConnectedNode(connection["node"], depth, [connection["index"]]))
+
+    return return_conns
+
+def get_parent_nodes_by_depth(connections_by_destination: Connections, node_name: str, max_depth: int = -1) -> List[ConnectedNode]:
+    return search_nodes_bfs(connections_by_destination, node_name, max_depth)

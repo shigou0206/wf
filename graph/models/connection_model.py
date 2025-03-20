@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import NamedTuple, Dict, List, Optional
 
-class ConnectionType(Enum):
+class ConnectionType(str,Enum):
     AI_AGENT = "ai_agent"
     AI_CHAIN = "ai_chain"
     AI_DOCUMENT = "ai_document"
