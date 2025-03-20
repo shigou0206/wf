@@ -243,19 +243,6 @@ class Workflow:
         depth: int = -1,
         checked_nodes: Optional[list[str]] = None,
     ) -> Optional[dict]:
-        """
-        获取 `node_name` 和 `parent_node_name` 之间的连接索引。
-
-        Args:
-            node_name (str): 目标节点的名称
-            parent_node_name (str): 父节点的名称
-            connection_type (ConnectionType): 连接类型，默认 `MAIN`
-            depth (int): 递归搜索的深度，默认 -1（无限制）
-            checked_nodes (list[str]): 已检查的节点（防止循环）
-        
-        Returns:
-            dict: 包含 `sourceIndex` 和 `destinationIndex` 的字典
-        """
         node = self.get_node(parent_node_name)
         if node is None:
             return None
